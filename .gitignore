@@ -47,5 +47,5 @@ Thumbs.db
 !datos/titulos.txt
 !datos/obras.txt
 
-# la carpeta que se arma para subir a GitHub: es una copia, no el original
-lacancito-para-github/
+# la carpeta que se arma para arrastrar a GitHub: es una copia, no el original
+SUBIR-A-GITHUB/
