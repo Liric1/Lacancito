@@ -37,6 +37,19 @@ from fonetica import localizar                                       # noqa: E40
 
 PUERTOS = [8765, 8766, 8767, 8768, 8080]
 
+AYUDA_SIN_BASE = """Lacancito no trae los textos de Lacan: la base se arma con los PDF
+que tengas vos. Es una sola vez y tarda unos minutos.
+
+  1) python -m pip install pymupdf
+  2) python ingesta/ingestar_todos.py "RUTA A TUS SEMINARIOS"
+  3) python ingesta/fuentes.py --carpeta "RUTA A TUS SEMINARIOS"
+  4) python ingesta/indexar_fonetica.py
+
+El paso a paso esta en INSTALAR.md.
+Si alguien te paso un archivo lacancito.db, ponelo en la carpeta
+datos y con eso alcanza.
+"""
+
 # Hay dos bases posibles y la app se adapta sola a la que encuentre:
 #   la completa   -> tiene la columna «texto»: muestra los pasajes
 #   la pública    -> no la tiene: sólo puede decir dónde está cada cosa
@@ -1037,7 +1050,13 @@ def main():
     args = ap.parse_args()
     DB_ACTUAL = args.db
     if not os.path.exists(DB_ACTUAL):
-        sys.exit(f"No encuentro la base en {DB_ACTUAL}.")
+        # Es lo primero que ve quien acaba de bajar el repositorio: la base
+        # no viene incluida y hay que armarla con los libros propios.
+        sys.exit(f"""
+No encuentro la base de datos en:
+  {DB_ACTUAL}
+
+{AYUDA_SIN_BASE}""")
 
     print("Preparando el buscador…")
     con = conexion()
