@@ -1,0 +1,32 @@
+# Títulos de las obras, tal como los trae la portada del
+# PDF. Corregí lo que va DESPUÉS del segundo :: y volvé a
+# correr fuentes.py. No toques lo que va antes.
+
+Seminario 1 — Los escritos técnicos de Freud :: Les écrits techniques de Freud :: Les écrits techniques de Freud
+Seminario 10 — La angustia :: L’Angoisse :: L’Angoisse
+Seminario 11 — Los cuatro conceptos fundamentales :: Fondements :: Fondements
+Seminario 12 — Problemas cruciales :: Problèmes cruciaux :: Problèmes cruciaux
+Seminario 13 — El objeto del psicoanálisis :: L’objet... :: L’objet...
+Seminario 14 — La lógica del fantasma :: Logique Du Fantasme :: Logique Du Fantasme
+Seminario 15 — El acto psicoanalítico :: L’Acte :: L’Acte
+Seminario 16 — De un Otro al otro :: D’un Autre à l’autre :: D’un Autre à l’autre
+Seminario 17 — El reverso del psicoanálisis :: L’envers de la psychanalyse :: L’envers de la psychanalyse
+Seminario 18 — De un discurso que no fuera del semblante :: D’un discours qui ne serait pas du semblant :: D’un discours qui ne serait pas du semblant
+Seminario 19 — …O peor :: …Ou pire :: …Ou pire
+Seminario 19b — El saber del psicoanalista :: Le savoir du psychanalyste :: Le savoir du psychanalyste
+Seminario 2 — El yo :: Le moi :: Le moi
+Seminario 20 — Aún :: Encore :: Encore
+Seminario 21 — Los no incautos yerran :: Les non-dupes errent :: Les non-dupes errent
+Seminario 22 — R.S.I. :: RSI :: RSI
+Seminario 23 — El sinthome :: Le Sinthome :: Le Sinthome
+Seminario 24 — L'insu que sait de l'une-bévue :: L’insu que sait de l’une-bévue s’aile à mourre :: L’insu que sait de l’une-bévue s’aile à mourre
+Seminario 25 — El momento de concluir :: Le moment de conclure :: Le moment de conclure
+Seminario 26 — La topología y el tiempo :: La topologie et le temps :: La topologie et le temps
+Seminario 27 — Disolución :: Dissolution :: Dissolution
+Seminario 3 — Las psicosis :: Psychoses :: Psychoses
+Seminario 4 — La relación de objeto :: La relation d ‘objet :: La relation d ‘objet
+Seminario 5 — Las formaciones del inconsciente :: Les formations de l’inconscient :: Les formations de l’inconscient
+Seminario 6 — El deseo y su interpretación :: Le Désir :: Le Désir
+Seminario 7 — La ética del psicoanálisis :: L’éthique :: L’éthique
+Seminario 8 — La transferencia :: Le transfert :: Le transfert
+Seminario 9 — La identificación :: L’identification :: L’identification
