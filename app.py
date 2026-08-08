@@ -277,6 +277,18 @@ def api_analisis(p):
         con.close()
 
 
+MANIFIESTO = {
+    "name": "Lacancito", "short_name": "Lacancito",
+    "description": "Buscador de citas de Lacan",
+    "start_url": "/", "display": "standalone",
+    "background_color": "#faf8f5", "theme_color": "#7a4b2a",
+    "icons": [
+        {"src": "/estatico/icono-192.png", "sizes": "192x192", "type": "image/png"},
+        {"src": "/estatico/icono-512.png", "sizes": "512x512", "type": "image/png"},
+    ],
+}
+
+
 def render_pagina(p):
     """Dibuja la página original del PDF. Sirve para dos cosas: verificar una
     transcripción dudosa contra el papel, y ver los esquemas de los volúmenes
@@ -371,6 +383,16 @@ class Manejador(BaseHTTPRequestHandler):
                     self.send_error(404)
                     return
                 return self._responder(img, "image/png")
+            if u.path == "/manifest.json":
+                return self._responder(json.dumps(MANIFIESTO, ensure_ascii=False),
+                                       "application/manifest+json")
+            if u.path.startswith("/estatico/"):
+                ruta = os.path.normpath(os.path.join(RAIZ, u.path.lstrip("/")))
+                if not ruta.startswith(os.path.join(RAIZ, "estatico"))                         or not os.path.exists(ruta):
+                    self.send_error(404)
+                    return
+                with open(ruta, "rb") as fh:
+                    return self._responder(fh.read(), "image/png")
             if u.path == "/api/partes":
                 return self._responder(json.dumps(api_partes(p), ensure_ascii=False))
             if u.path == "/api/catalogo":
@@ -382,8 +404,13 @@ class Manejador(BaseHTTPRequestHandler):
 
 PAGINA = r"""<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lacancito</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/estatico/icono-192.png">
+<meta name="theme-color" content="#7a4b2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lacancito">
 <style>
   :root{
     --tinta:#1a1a1a; --papel:#faf8f5; --tenue:#6b6560; --linea:#e0dad2;
@@ -485,7 +512,34 @@ PAGINA = r"""<!doctype html>
     font-size:13px;color:var(--tenue)}
   footer a{color:var(--acento)}
   footer .autor{color:var(--tinta);font-weight:600}
-  @media(max-width:620px){ .barra .nom{flex-basis:150px} }
+  /* ── Teléfono ──────────────────────────────────────────────────────────
+     Dos cosas cambian en pantalla chica. Los filtros se pliegan detrás de un
+     botón: son cinco desplegables que ocupaban media pantalla antes de que se
+     viera un solo resultado. Y todo lo que se toca pasa a medir 44 px de alto,
+     que es el mínimo para un dedo; a 15 px se erraba siempre. */
+  #filtros{display:none;border:1px solid var(--linea);background:none;
+    color:var(--tenue);border-radius:8px;padding:0 14px;height:44px;font-size:14px}
+  @media (max-width:620px){
+    header{padding:14px}
+    main{padding:14px}
+    #filtros{display:block;margin-top:10px;width:100%}
+    .opciones{display:none}
+    .opciones.abierto{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+    .opciones label{display:flex;align-items:center;gap:8px}
+    .opciones select{flex:1;max-width:none;height:44px;font-size:15px}
+    .modos{width:100%}
+    .modos label{flex:1;text-align:center;padding:10px 4px;font-size:13px}
+    .modos input:checked + span{padding:10px 4px;margin:-10px -4px;display:block}
+    #q{font-size:16px;height:48px}          /* 16px evita que el iPhone haga zoom */
+    button.ir{height:48px}
+    .acciones{gap:0;flex-direction:column;align-items:stretch;margin-top:4px}
+    .acciones button,.acciones a{min-height:44px;display:flex;align-items:center;
+      text-decoration:none;border-top:1px solid var(--linea);font-size:15px}
+    .pasaje{font-size:16px}
+    svg.graf{min-height:110px}
+    .barra .nom{flex-basis:120px}
+    .resumen .datos{gap:10px 14px}
+  }
 </style></head><body>
 <header><div class="caja">
   <div class="titulo">
@@ -496,6 +550,7 @@ PAGINA = r"""<!doctype html>
     <input id="q" autocomplete="off" autofocus>
     <button class="ir" type="submit" id="t-buscar"></button>
   </form>
+  <button id="filtros" type="button"></button>
   <div class="opciones">
     <div class="modos">
       <label><input type="radio" name="modo" value="exacta" checked><span id="t-m1"></span></label>
@@ -547,6 +602,7 @@ const T = {
  es:{ otro:'English', sub:'buscador de citas de Lacan', buscar:'Buscar',
    ph:'Escribí lo que buscás…', m1:'Texto exacto', m2:'Por cómo suena',
    m3:'Contar', m4:'Palabras cerca', en:'en', todas:'todas las obras',
+   filtros:'Filtros',
    dist:'a menos de', palabras:'palabras',
    verPag:'ver la página original',
    cargando:'cargando…',
@@ -595,6 +651,7 @@ const T = {
  en:{ otro:'Español', sub:'a search engine for Lacan quotations', buscar:'Search',
    ph:'Type what you are looking for…', m1:'Exact text', m2:'By sound',
    m3:'Count', m4:'Words near', en:'in', todas:'all works',
+   filtros:'Filters',
    dist:'within', palabras:'words',
    verPag:'show original page',
    cargando:'loading…',
@@ -652,6 +709,8 @@ function pintarIdioma(){
   $('#t-m1').textContent = t.m1; $('#t-m2').textContent = t.m2;
   $('#t-m3').textContent = t.m3; $('#t-en').textContent = t.en;
   $('#t-m4').textContent = t.m4; $('#t-dist').textContent = t.dist;
+  $('#filtros').textContent = ($('.opciones').classList.contains('abierto')
+                               ? '✕ ' : '≡ ') + t.filtros;
   $('#ayuda').innerHTML = t.ayuda;
   pintarFamilias();
   $('#t-hecha').textContent = t.hecha + ' ';
@@ -878,6 +937,11 @@ qué está mal: `;
   }
 });
 
+$('#filtros').addEventListener('click', () => {
+  const abierto = $('.opciones').classList.toggle('abierto');
+  $('#filtros').textContent = (abierto ? '✕ ' : '≡ ') + T[L].filtros;
+});
+
 $('#q').addEventListener('keydown', e => {
   if(e.key === 'Enter'){ e.preventDefault(); $('#f').requestSubmit(); }
 });
@@ -1064,16 +1128,21 @@ No encuentro la base de datos en:
     total = con.execute("SELECT count(*) FROM segmento").fetchone()[0]
     con.close()
 
-    puerto = puerto_libre()
+    # En un servidor, el puerto y la dirección los impone el proveedor; en una
+    # computadora se busca uno libre y se escucha sólo desde adentro.
+    alojado = bool(os.environ.get("PORT"))
+    puerto = int(os.environ["PORT"]) if alojado else puerto_libre()
+    host = "0.0.0.0" if alojado else "127.0.0.1"
     url = f"http://localhost:{puerto}/"
     print(f"\n  Lacancito está andando: {url}")
     print(f"  {total:,} fragmentos listos para buscar.")
     print("\n  Se abre solo en el navegador. Si no, copiá esa dirección.")
     print("  Para cerrarlo, cerrá esta ventana.\n")
 
-    threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+    if not alojado:
+        threading.Timer(0.7, lambda: webbrowser.open(url)).start()
     try:
-        ThreadingHTTPServer(("127.0.0.1", puerto), Manejador).serve_forever()
+        ThreadingHTTPServer((host, puerto), Manejador).serve_forever()
     except KeyboardInterrupt:
         print("Cerrado.")
 
