@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────
+#  LO QUE NUNCA DEBE SUBIRSE
+#  Esta es la parte importante del archivo. Todo lo de abajo contiene, o
+#  reconstruye, texto de Lacan. Subirlo a un repositorio público es
+#  publicarlo, con nombre y apellido del que lo subió.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Las bases. La completa tiene el texto entero; la pública no, pero pesa
+# 97 MB y GitHub rechaza archivos de más de 100 MB. Ninguna va en el repo:
+# se arman corriendo los ingestores, o se publican como «Release».
+datos/*.db
+datos/*.db-journal
+datos/*.db-wal
+
+# Las figuras: son recortes de las páginas de los libros.
+datos/figuras/
+
+# Los volcados intermedios de la ingesta, que traen títulos y páginas del
+# documento interno de la escuela. No hacen falta en el repositorio.
+datos/*.json
+datos/otros_faltantes.txt
+datos/sumario_*.txt
+
+# Cualquier PDF o libro que quede suelto en la carpeta.
+*.pdf
+*.docx
+*.epub
+*.txt.bak
+
+# ─────────────────────────────────────────────────────────────────────────
+#  Lo de siempre
+# ─────────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ─────────────────────────────────────────────────────────────────────────
+#  Lo que SÍ conviene subir, aunque esté en datos/ y sea .txt:
+#  son correcciones a mano, no obra ajena. Se salvan de la regla de arriba.
+# ─────────────────────────────────────────────────────────────────────────
+!datos/titulos.txt
+!datos/obras.txt
+
+# la carpeta que se arma para arrastrar a GitHub: es una copia, no el original
+SUBIR-A-GITHUB/
