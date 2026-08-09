@@ -66,11 +66,21 @@ en `.db`.
 | Campo | Qué poner |
 |---|---|
 | Language | Python 3 |
-| Build Command | `pip install pymupdf && mkdir -p datos && curl -L -o datos/lacancito.db "LA-DIRECCIÓN-DEL-RELEASE"` |
+| Build Command | `pip install -r requirements.txt` |
 | Start Command | `python app.py` |
 | Instance Type | Free |
 
-**5.** *Create Web Service*. La primera vez tarda unos minutos: instala Python,
+**5.** Antes de crear el servicio, bajá hasta **Environment Variables** →
+*Add Environment Variable*:
+
+| Key | Value |
+|---|---|
+| `LACANCITO_DB_URL` | la dirección del Release que copiaste en el paso 1 |
+
+Con eso la app se baja la base sola la primera vez que arranca. No hay que
+escribir ningún comando de descarga.
+
+**6.** *Create Web Service*. La primera vez tarda unos minutos: instala Python,
 baja la base y arranca. Al terminar te da una dirección tipo
 `https://lacancito.onrender.com`.
 

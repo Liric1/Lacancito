@@ -58,6 +58,35 @@ datos y con eso alcanza.
 DB_ACTUAL = DB
 
 
+def bajar_base_si_falta(destino):
+    """En un servidor la base no viene con el codigo: pesa 156 MB y GitHub no
+    acepta archivos de mas de 100 MB. Se sube aparte como «Release» y se indica
+    su direccion en la variable LACANCITO_DB_URL; aca se baja al arrancar.
+
+    Asi el que configura el servidor pone una direccion en una casilla, en vez
+    de escribir un comando de descarga a mano."""
+    url = os.environ.get("LACANCITO_DB_URL")
+    if not url or os.path.exists(destino):
+        return
+    import urllib.request
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+    print(f"Bajando la base desde {url[:70]}…")
+    parcial = destino + ".parcial"
+    with urllib.request.urlopen(url) as r, open(parcial, "wb") as fh:
+        total, leido = int(r.headers.get("Content-Length") or 0), 0
+        while True:
+            trozo = r.read(1 << 20)
+            if not trozo:
+                break
+            fh.write(trozo)
+            leido += len(trozo)
+            if total:
+                print(f"  bajando... {100 * leido // total}%", flush=True)
+    # se renombra al final: si la descarga se corta, no queda una base a medias
+    os.replace(parcial, destino)
+    print(f"Base lista: {os.path.getsize(destino) / 1e6:.0f} MB")
+
+
 def conexion():
     """Una conexión por pedido: el servidor atiende en varios hilos y una
     conexión de sqlite no se puede compartir entre hilos."""
@@ -1113,6 +1142,7 @@ def main():
                     help="qué base usar; con la pública no se muestra texto")
     args = ap.parse_args()
     DB_ACTUAL = args.db
+    bajar_base_si_falta(DB_ACTUAL)
     if not os.path.exists(DB_ACTUAL):
         # Es lo primero que ve quien acaba de bajar el repositorio: la base
         # no viene incluida y hay que armarla con los libros propios.
