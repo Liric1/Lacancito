@@ -65,9 +65,24 @@ def bajar_base_si_falta(destino):
 
     Asi el que configura el servidor pone una direccion en una casilla, en vez
     de escribir un comando de descarga a mano."""
-    url = os.environ.get("LACANCITO_DB_URL")
+    url = (os.environ.get("LACANCITO_DB_URL") or "").strip()
     if not url or os.path.exists(destino):
         return
+    if not url.lower().startswith(("http://", "https://")):
+        # El error típico: pegar la ruta del archivo en la propia computadora.
+        # El servidor está en otra máquina y esa carpeta no existe para él.
+        raise SystemExit(f"""
+LACANCITO_DB_URL no es una dirección de internet:
+  {url}
+
+El servidor no puede ver los archivos de tu computadora. Hay que subir la
+base a algún lado y poner acá su dirección, que empieza con https:// y
+termina en .db. Si la subiste como Release de GitHub, se parece a esto:
+
+  https://github.com/USUARIO/REPO/releases/download/base-v1/lacancito.db
+
+Está explicado en PONERLA-EN-INTERNET.md.
+""")
     import urllib.request
     os.makedirs(os.path.dirname(destino), exist_ok=True)
     print(f"Bajando la base desde {url[:70]}…")
