@@ -49,3 +49,6 @@ Thumbs.db
 
 # la carpeta que se arma para arrastrar a GitHub: es una copia, no el original
 SUBIR-A-GITHUB/
+
+# basura que dejan algunos comandos de PowerShell
+$null
