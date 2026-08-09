@@ -20,6 +20,7 @@ import re
 import socket
 import sqlite3
 import sys
+import time
 
 import pymupdf
 import threading
@@ -102,11 +103,32 @@ Está explicado en PONERLA-EN-INTERNET.md.
     print(f"Base lista: {os.path.getsize(destino) / 1e6:.0f} MB")
 
 
+# En una computadora sobra tiempo; en un servidor gratuito, con una décima de
+# procesador y un disco lento, una consulta pesada puede tardar minutos y el
+# visitante sólo ve una página que no termina de cargar. Estos dos parámetros
+# convierten el cuelgue en un error visible y con nombre.
+LIMITE_SEG = int(os.environ.get("LACANCITO_LIMITE_SEG", "25"))
+
+
+class Demorada(Exception):
+    """La consulta pasó del tiempo permitido."""
+
+
 def conexion():
     """Una conexión por pedido: el servidor atiende en varios hilos y una
     conexión de sqlite no se puede compartir entre hilos."""
     con = sqlite3.connect(DB_ACTUAL)
     con.row_factory = sqlite3.Row
+    # el disco del servidor es lento: conviene leer el archivo mapeado en
+    # memoria y darle algo de caché, en vez de mil lecturas sueltas
+    con.execute("PRAGMA mmap_size = 268435456")
+    con.execute("PRAGMA cache_size = -32000")
+    con.execute("PRAGMA temp_store = MEMORY")
+    if LIMITE_SEG:
+        vence = time.time() + LIMITE_SEG
+        # sqlite llama a esto cada tantas instrucciones; si devuelve algo
+        # verdadero, aborta la consulta en curso
+        con.set_progress_handler(lambda: time.time() > vence, 100000)
     return con
 
 
@@ -125,6 +147,7 @@ def fila_a_dict(f, pasaje):
 
 
 def api_buscar(p):
+    reloj = time.time()
     q = (p.get("q", [""])[0] or "").strip()
     modo = p.get("modo", ["exacta"])[0]
     obra = p.get("obra", [""])[0] or None
@@ -171,8 +194,11 @@ def api_buscar(p):
             consulta = '"' + q.replace('"', "") + '"' if " " in q else q
         filas, total, linea = buscar(con, consulta, capa, obra, limite,
                                      familia, parte)
-        return {"modo": modo, "total": total, "linea": linea,
-                "resultados": [fila_a_dict(f, f["frag"]) for f in filas]}
+        salida = {"modo": modo, "total": total, "linea": linea,
+                  "resultados": [fila_a_dict(f, f["frag"]) for f in filas]}
+        print(f"buscar «{q[:30]}» modo={modo} → {total} en "
+              f"{time.time() - reloj:.1f}s", flush=True)
+        return salida
     finally:
         con.close()
 
@@ -489,7 +515,17 @@ class Manejador(BaseHTTPRequestHandler):
                 return self._responder(json.dumps(api_partes(p), ensure_ascii=False))
             if u.path == "/api/catalogo":
                 return self._responder(json.dumps(api_catalogo(), ensure_ascii=False))
+        except sqlite3.OperationalError as e:
+            if "interrupted" in str(e).lower():
+                print(f"CONSULTA DEMORADA (>{LIMITE_SEG}s): {self.path}", flush=True)
+                return self._responder(json.dumps(
+                    {"error": f"La consulta tardó más de {LIMITE_SEG} segundos "
+                              "y se cortó. El servidor está sobrecargado."},
+                    ensure_ascii=False))
+            print(f"ERROR SQL en {self.path}: {e}", flush=True)
+            return self._responder(json.dumps({"error": str(e)}, ensure_ascii=False))
         except Exception as e:                                    # noqa: BLE001
+            print(f"ERROR en {self.path}: {type(e).__name__}: {e}", flush=True)
             return self._responder(json.dumps({"error": str(e)}, ensure_ascii=False))
         self.send_error(404)
 
