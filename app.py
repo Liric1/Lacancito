@@ -235,9 +235,16 @@ def api_catalogo():
         familias = [r[0] for r in con.execute(
             "SELECT DISTINCT familia FROM segmento WHERE familia IS NOT NULL"
             " ORDER BY familia")]
+        # «Ver la página original» abre el PDF del que salió el fragmento. En un
+        # servidor esos PDF no están: sólo viajó la base. Antes el botón se
+        # mostraba igual y devolvía 404, justo en la función que sostiene la
+        # promesa de contrastar contra el papel. Ahora el frente pregunta.
+        hay_pdf = any(
+            r[0] and os.path.exists(r[0])
+            for r in con.execute("SELECT ruta FROM fuente WHERE ruta IS NOT NULL"))
         return {"obras": [{"obra": o, "grupo": grupo(o)} for o in obras],
                 "familias": familias, "fuentes": fuentes,
-                }
+                "hay_pdf": hay_pdf}
     finally:
         con.close()
 
@@ -254,14 +261,41 @@ def _serie_corpus(con):
 
 
 def _gini(valores):
-    """0 = el término está repartido parejo entre las obras;
-       1 = está concentrado en una sola."""
+    """0 = repartido parejo; 1 = todo concentrado en un solo lugar.
+
+    Se calcula sobre TASAS, no sobre conteos crudos. Sobre conteos mediría
+    también la desigualdad de tamaño de las obras: un seminario largo tiene
+    más de todo, y eso no dice nada sobre la concentración del término."""
     v = sorted(x for x in valores if x > 0)
     if len(v) < 2:
         return 1.0
     total = sum(v)
     acum = sum((i + 1) * x for i, x in enumerate(v))
     return round((2 * acum) / (len(v) * total) - (len(v) + 1) / len(v), 3)
+
+
+RE_NO_LETRA = "(?<![a-z0-9])%s(?![a-z0-9])"
+
+
+def _contar_ocurrencias(textos, termino):
+    """Cuántas veces aparece de verdad, no en cuántos fragmentos.
+
+    El motor de búsqueda devuelve fragmentos que contienen el término; un
+    pasaje que lo dice tres veces cuenta uno solo. La diferencia no es chica
+    ni pareja: va de 1,47 veces para «jouissance» a 1,67 para «sinthome», así
+    que usar fragmentos como si fueran ocurrencias deforma la comparación
+    entre términos. Acá se cuenta sobre el texto, palabra entera, como
+    tokeniza el motor."""
+    import unicodedata
+    def pelar(t):
+        return "".join(c for c in unicodedata.normalize("NFD", t.lower())
+                       if unicodedata.category(c) != "Mn")
+    partes = [w for w in re.findall(r"[\w'’]+", pelar(termino)) if w]
+    if not partes:
+        return 0
+    # con varias palabras se cuenta la frase; con una, la palabra
+    patron = re.compile(RE_NO_LETRA % r"[^a-z0-9]+".join(re.escape(w) for w in partes))
+    return sum(len(patron.findall(pelar(t))) for t in textos)
 
 
 def api_analisis(p):
@@ -283,14 +317,27 @@ def api_analisis(p):
             base = f"""FROM busqueda JOIN segmento s ON s.id = busqueda.rowid
                        WHERE busqueda MATCH :q{cond}"""
             arg = {"q": consulta, "capa": capa}
-            total = con.execute(f"SELECT count(*) {base}", arg).fetchone()[0]
-            por_anio = {r[0]: r[1] for r in con.execute(
-                f"SELECT substr(s.sesion_fecha,1,4), count(*) {base}"
-                " AND s.sesion_fecha IS NOT NULL GROUP BY 1", arg)}
-            sin_fecha = con.execute(
-                f"SELECT count(*) {base} AND s.sesion_fecha IS NULL", arg).fetchone()[0]
-            por_obra = [{"obra": r[0], "n": r[1]} for r in con.execute(
-                f"SELECT s.obra, count(*) {base} GROUP BY 1 ORDER BY 2 DESC", arg)]
+
+            # se traen los textos que coinciden y se cuentan las ocurrencias
+            # reales; con count(*) se contarían fragmentos, que es otra cosa
+            filas_t = con.execute(
+                f"SELECT s.sesion_fecha, s.obra, s.texto {base}", arg).fetchall()
+            por_anio, por_obra_d, sin_fecha, fragmentos = {}, {}, 0, len(filas_t)
+            for fecha, obra_f, texto in filas_t:
+                n = _contar_ocurrencias([texto], termino)
+                por_obra_d[obra_f] = por_obra_d.get(obra_f, 0) + n
+                if fecha:
+                    por_anio[fecha[:4]] = por_anio.get(fecha[:4], 0) + n
+                else:
+                    sin_fecha += n
+            por_obra = [{"obra": o, "n": n} for o, n in
+                        sorted(por_obra_d.items(), key=lambda x: -x[1])]
+            # palabras de cada obra, para que la concentración no mida tamaños
+            palabras_obra = {r[0]: r[1] for r in con.execute(
+                "SELECT obra, sum(length(texto)-length(replace(texto,' ',''))+1)"
+                " FROM segmento WHERE capa='lacan' GROUP BY 1")}
+            tasas = [o["n"] / max(1, palabras_obra.get(o["obra"], 1))
+                     for o in por_obra]
             n_obras = con.execute(
                 "SELECT count(DISTINCT obra) FROM segmento WHERE capa='lacan'").fetchone()[0]
 
@@ -307,14 +354,15 @@ def api_analisis(p):
             pico_abs = max(serie, key=lambda x: x["n"], default=None)
             conf = [x for x in serie if x["n"]]
             salida["terminos"].append({
-                "termino": termino, "total": total, "sin_fecha": sin_fecha,
+                "termino": termino, "total": sum(por_obra_d.values()),
+                "fragmentos": fragmentos, "sin_fecha": sin_fecha,
                 "serie": serie, "por_obra": por_obra[:14],
                 "primera": conf[0]["anio"] if conf else None,
                 "ultima": conf[-1]["anio"] if conf else None,
                 "pico_rel": pico["anio"] if pico and pico["rel"] else None,
                 "pico_abs": pico_abs["anio"] if pico_abs and pico_abs["n"] else None,
                 "obras_con": len(por_obra), "obras_total": n_obras,
-                "gini": _gini([o["n"] for o in por_obra]),
+                "gini": _gini(tasas),
             })
         return salida
     finally:
@@ -541,6 +589,7 @@ PAGINA = r"""<!doctype html>
   .resumen{padding:10px 0;border-bottom:1px solid var(--linea)}
   .resumen .pto{display:inline-block;width:10px;height:10px;border-radius:50%;
     margin-right:8px;vertical-align:0}
+  .resumen .menor{font-size:12px;color:var(--tenue)}
   .resumen .datos{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px;
     font-size:13px;color:var(--tenue)}
   .nota-analisis{font-size:13px;color:var(--tenue);line-height:1.7;
@@ -652,7 +701,7 @@ const T = {
    cargando:'cargando…',
    aparic:'apariciones', sinFecha:'sin fecha', primera:'primera', ultima:'última',
    picoRel:'pico relativo', picoAbs:'pico absoluto', enObras:'en obras',
-   gini:'concentración',
+   gini:'concentración', fragmentos:'fragmentos',
    gRel:'Frecuencia relativa — apariciones por cada 10.000 palabras del año',
    gAbs:'Frecuencia absoluta — apariciones por año',
    gAcum:'Acumulado — cuándo irrumpe y cuándo se estanca',
@@ -660,8 +709,11 @@ const T = {
    notaRel:'La frecuencia relativa es la que importa para comparar años: en '+
      '1967 Lacan habló mucho más que en 1953, así que el conteo en bruto '+
      'favorece siempre a los años cargados. La concentración va de 0 (repartido '+
-     'parejo entre las obras) a 1 (todo en una sola). Escribí varios términos '+
-     'separados por coma para superponerlos.',
+     'parejo entre las obras) a 1 (todo en una sola), y se calcula sobre tasas '+
+     'por obra, no sobre conteos: sobre conteos mediría también el tamaño de '+
+     'cada volumen. Se cuentan ocurrencias reales, no fragmentos que la '+
+     'contienen: un pasaje que dice la palabra tres veces cuenta tres. Escribí '+
+     'varios términos separados por coma para superponerlos.',
    gsem:'Seminarios', gesc:'Escritos',
    capas:['sólo lo que dijo Lacan','notas del transcriptor','notas al pie','todo'],
    ctx:'ver alrededor', ocultar:'ocultar', cita:'ver la cita completa',
@@ -701,7 +753,7 @@ const T = {
    cargando:'loading…',
    aparic:'occurrences', sinFecha:'undated', primera:'first', ultima:'last',
    picoRel:'relative peak', picoAbs:'absolute peak', enObras:'in works',
-   gini:'concentration',
+   gini:'concentration', fragmentos:'fragments',
    gRel:'Relative frequency — occurrences per 10,000 words of that year',
    gAbs:'Absolute frequency — occurrences per year',
    gAcum:'Cumulative — when it breaks in and when it plateaus',
@@ -709,7 +761,9 @@ const T = {
    notaRel:'Relative frequency is what matters when comparing years: Lacan '+
      'spoke far more in 1967 than in 1953, so raw counts always favour the busy '+
      'years. Concentration runs from 0 (spread evenly across works) to 1 (all '+
-     'in one). Type several terms separated by commas to overlay them.',
+     'in one), computed on per-work rates rather than raw counts, which would '+
+     'also measure volume size. Real occurrences are counted, not fragments '+
+     'containing the term. Type several terms separated by commas to overlay.',
    gsem:'Seminars', gesc:'Écrits',
    capas:["only Lacan's words",'transcriber notes','footnotes','everything'],
    ctx:'show surrounding text', ocultar:'hide', cita:'show full reference',
@@ -742,6 +796,7 @@ const T = {
 };
 let L = localStorage.getItem('lacancito.idioma') || 'es';
 let CAT = {obras:[], fuentes:{}};
+let HAY_PDF = false;
 
 function pintarIdioma(){
   const t = T[L];
@@ -905,7 +960,7 @@ function tarjeta(r){
     + '<button data-apa="1">'+esc(t.cita)+'</button>'
     + '<a href="'+esc(enlaceDeepl(r.texto, r.idioma))+'" target="_blank"'
     + ' rel="noopener noreferrer">'+esc(t.trad)+'</a>'
-    + '<button data-pag="1">'+esc(t.verPag)+'</button>'
+    + (HAY_PDF ? '<button data-pag="1">'+esc(t.verPag)+'</button>' : '')
     + '<button data-err="1">'+esc(t.reportar)+'</button>'
     + '</div>';
   return a;
@@ -1062,7 +1117,8 @@ async function pintarAnalisis(q){
     const sinf = x.sin_fecha ? ' · '+x.sin_fecha+' '+t.sinFecha : '';
     cont.insertAdjacentHTML('beforeend',
       '<div class="resumen"><span class="pto" style="background:'+COLORES[i]+'"></span>'
-      + '<b>'+esc(x.termino)+'</b> — '+x.total.toLocaleString()+' '+t.aparic+sinf
+      + '<b>'+esc(x.termino)+'</b> — '+x.total.toLocaleString()+' '+t.aparic
+      + ' <span class="menor">'+t.en+' '+x.fragmentos.toLocaleString()+' '+t.fragmentos+'</span>'+sinf
       + '<div class="datos">'
       + '<span>'+t.primera+' <b>'+x.primera+'</b></span>'
       + '<span>'+t.ultima+' <b>'+x.ultima+'</b></span>'
@@ -1133,7 +1189,7 @@ $('#f').addEventListener('submit', async ev => {
 });
 
 fetch('/api/catalogo').then(r=>r.json()).then(d=>{
-  CAT = d;
+  CAT = d; HAY_PDF = !!d.hay_pdf;
   pintarIdioma();
 });
 </script></body></html>

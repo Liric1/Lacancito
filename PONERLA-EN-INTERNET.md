@@ -66,7 +66,7 @@ en `.db`.
 | Campo | Qué poner |
 |---|---|
 | Language | Python 3 |
-| Build Command | `pip install -r requirements.txt` |
+| Build Command | `pip install -r requirements.txt && python descargar_base.py` |
 | Start Command | `python app.py` |
 | Instance Type | Free |
 
@@ -91,9 +91,15 @@ Esa dirección es la que les pasás a tus colegas.
 ## Lo que hay que saber del plan gratuito
 
 **Se duerme.** Si nadie la usa por 15 minutos, Render la apaga. La primera
-visita después la despierta y tarda unos 30 segundos en responder. Las
-siguientes van rápido. Se soluciona pagando (unos 7 dólares por mes) o
-avisándoles a tus colegas que la primera carga demora.
+visita después la despierta y tarda unos segundos. Las siguientes van rápido.
+Se soluciona pagando (unos 7 dólares por mes) o avisando que la primera carga
+demora.
+
+**Por qué la descarga va en el comando de construcción y no al arrancar.** Lo
+que se escribe mientras el servicio corre se pierde en cada apagón; lo que
+queda de la construcción, no. Con la descarga al arrancar, cada visitante que
+llega después de un rato de inactividad esperaba los 156 MB enteros. Con la
+descarga en la construcción se hace una vez por despliegue.
 
 **Memoria.** El plan gratuito da 512 MB de RAM. Lacancito con esta base entra,
 pero si el corpus crece mucho habrá que mirar.
